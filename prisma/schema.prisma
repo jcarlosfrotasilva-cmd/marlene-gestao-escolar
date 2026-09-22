@@ -18,10 +18,12 @@ model User {
 }
 
 model Categoria {
-  id        String    @id @default(cuid())
-  nome      String    @unique
+  id        String           @id @default(cuid())
+  nome      String           @unique
+  tipo      String           @default("Servidor")
   servidors Servidor[]
-  createdAt DateTime  @default(now())
+  regras    RegraVantagem[]
+  createdAt DateTime         @default(now())
 }
 
 model Cargo {
@@ -38,27 +40,57 @@ model Lotacao {
   createdAt DateTime  @default(now())
 }
 
-model Servidor {
+model RegraVantagem {
   id          String    @id @default(cuid())
+  codigo      String    @unique
   nome        String
-  cpf         String    @unique
+  descricao   String?
+  categoriaId String?
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id])
+  tipo        String    @default("beneficio")
+  ativo       Boolean   @default(true)
+  obrigatorio Boolean   @default(false)
+  valor       String?
+  unidade     String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model BeneficioServidor {
+  id          String   @id @default(cuid())
+  servidorId  String
+  servidor    Servidor @relation(fields: [servidorId], references: [id])
+  codigo      String
+  nome        String
+  descricao   String?
+  ativo       Boolean  @default(true)
+  adquiridoEm DateTime?
+  observacao  String?
+  createdAt   DateTime @default(now())
+}
+
+model Servidor {
+  id          String            @id @default(cuid())
+  nome        String
+  cpf         String            @unique
   rgcin       String?
   dtnasc      DateTime?
   sexo        String?
   tel         String?
   email       String?
   cargoId     String?
-  cargo       Cargo?    @relation(fields: [cargoId], references: [id])
+  cargo       Cargo?            @relation(fields: [cargoId], references: [id])
   categoriaId String?
-  categoria   Categoria? @relation(fields: [categoriaId], references: [id])
+  categoria   Categoria?        @relation(fields: [categoriaId], references: [id])
   faixa       String?
   nivel       String?
   jornada     String?
   lotacaoId   String?
-  lotacao     Lotacao?  @relation(fields: [lotacaoId], references: [id])
-  situacao    String    @default("Ativo")
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  lotacao     Lotacao?          @relation(fields: [lotacaoId], references: [id])
+  situacao    String            @default("Ativo")
+  beneficios  BeneficioServidor[]
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
 }
 
 model Importacao {
@@ -74,11 +106,11 @@ model Importacao {
 }
 
 model ImportacaoErro {
-  id          String      @id @default(cuid())
-  importacao  Importacao  @relation(fields: [importacaoId], references: [id])
+  id           String      @id @default(cuid())
   importacaoId String
-  linha       Int
-  campo       String?
-  mensagem    String
-  createdAt   DateTime    @default(now())
+  importacao   Importacao  @relation(fields: [importacaoId], references: [id])
+  linha        Int
+  campo        String?
+  mensagem     String
+  createdAt    DateTime    @default(now())
 }
