@@ -1,7 +1,5 @@
-const nextConfig = {
+export default {
   experimental: {
     serverActions: true,
   },
 };
-
-module.exports = nextConfig;

@@ -1,47 +1,162 @@
-import { FileSpreadsheet, Upload, AlertTriangle, BadgeCheck } from 'lucide-react';
-
-const checklist = [
-  { label: 'Campos obrigatórios validados', icon: BadgeCheck },
-  { label: 'Células vazias identificadas', icon: AlertTriangle },
-  { label: 'CPFs duplicados detectados', icon: BadgeCheck },
+export const expectedColumns = [
+  'nome',
+  'cpf',
+  'rgcin',
+  'dtnasc',
+  'sexo',
+  'tel',
+  'email',
+  'cargo',
+  'categoria',
+  'faixa',
+  'nivel',
+  'jornada',
+  'lotacao',
+  'situacao',
 ];
 
-export default function ImportarPage() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm uppercase tracking-[0.2em] text-primary-700">Importação</p>
-        <h1 className="mt-2 text-3xl font-bold text-slate-900">Planilha de cadastro</h1>
-      </div>
+export const columnAliases: Record<string, string[]> = {
+  nome: ['nome', 'nome completo', 'nome_completo'],
+  cpf: ['cpf'],
+  rgcin: ['rgcin', 'rg', 'cin'],
+  dtnasc: ['dtnasc', 'data nascimento', 'dt_nasc'],
+  sexo: ['sexo'],
+  tel: ['tel', 'telefone', 'celular'],
+  email: ['email', 'e-mail'],
+  cargo: ['cargo', 'cargo atual'],
+  categoria: ['categoria', 'vinculo', 'tipo de vínculo'],
+  faixa: ['faixa'],
+  nivel: ['nivel', 'nível'],
+  jornada: ['jornada'],
+  lotacao: ['lotacao', 'unidade', 'lotação'],
+  situacao: ['situacao', 'status'],
+};
 
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <div className="rounded-3xl border border-dashed border-primary-300 bg-primary-50 p-8 text-center shadow-soft">
-          <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-2xl bg-white text-primary-700 shadow-sm">
-            <Upload className="h-10 w-10" />
-          </div>
-          <h2 className="mt-5 text-xl font-semibold text-slate-900">Arraste ou selecione a planilha</h2>
-          <p className="mt-2 text-sm text-slate-600">Arquivos .xlsx ou .xls com colunas padronizadas.</p>
+export function normalizeText(value: unknown): string {
+  return String(value ?? '').trim();
+}
 
-          <button className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-700">
-            <FileSpreadsheet className="h-4 w-4" />
-            Selecionar arquivo
-          </button>
-        </div>
+export function normalizeCpf(value: unknown): string {
+  return normalizeText(value).replace(/\D/g, '');
+}
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-          <h3 className="text-lg font-semibold text-slate-900">Validação inteligente</h3>
-          <div className="mt-5 space-y-4">
-            {checklist.map(({ label, icon: Icon }) => (
-              <div key={label} className="flex items-center gap-3 rounded-2xl bg-slate-50 p-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-primary-700">
-                  <Icon className="h-4 w-4" />
-                </div>
-                <span className="text-sm font-medium text-slate-700">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+export function normalizeEmail(value: unknown): string {
+  return normalizeText(value).toLowerCase();
+}
+
+export function toTitleCase(value: string): string {
+  return value
+    .toLowerCase()
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+export function canonicalizeHeader(value: string): string {
+  return normalizeText(value).toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+export function findColumnMap(headers: string[]): Record<string, string> {
+  const map: Record<string, string> = {};
+
+  for (const header of headers) {
+    const normalizedHeader = canonicalizeHeader(header);
+
+    for (const [target, aliases] of Object.entries(columnAliases)) {
+      const aliasSet = aliases.map((alias) => canonicalizeHeader(alias));
+
+      if (aliasSet.includes(normalizedHeader)) {
+        map[target] = header;
+        break;
+      }
+    }
+  }
+
+  return map;
+}
+
+export function sanitizeServerRow(row: Record<string, unknown>, columnMap: Record<string, string>) {
+  const result: Record<string, string> = {};
+
+  for (const key of Object.keys(columnMap)) {
+    const sourceKey = columnMap[key];
+    const rawValue = row[sourceKey] ?? '';
+    const text = normalizeText(rawValue);
+    result[key] = text;
+  }
+
+  result.nome = toTitleCase(result.nome || '');
+  result.cpf = normalizeCpf(result.cpf);
+  result.email = normalizeEmail(result.email);
+  result.categoria = toTitleCase(result.categoria || '');
+  result.cargo = toTitleCase(result.cargo || '');
+  result.lotacao = toTitleCase(result.lotacao || '');
+  result.situacao = normalizeText(result.situacao || 'Ativo').replace(/^\w/, (char) => char.toUpperCase());
+  result.jornada = toTitleCase(result.jornada || '');
+
+  return result;
+}
+
+export function validateServerRow(
+  row: Record<string, string>,
+  index: number,
+  seenCpfs: Set<string>,
+) {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  const nome = normalizeText(row.nome);
+  const cpf = normalizeCpf(row.cpf);
+  const cargo = normalizeText(row.cargo);
+  const categoria = normalizeText(row.categoria);
+  const situacao = normalizeText(row.situacao) || 'Ativo';
+
+  if (!nome) {
+    errors.push('Nome ausente');
+  }
+
+  if (!cpf || cpf.length !== 11) {
+    errors.push('CPF inválido ou vazio');
+  } else if (seenCpfs.has(cpf)) {
+    errors.push('CPF duplicado');
+  } else {
+    seenCpfs.add(cpf);
+  }
+
+  if (!cargo) {
+    errors.push('Cargo ausente');
+  }
+
+  if (!categoria) {
+    errors.push('Categoria ausente');
+  }
+
+  if (!row.email) {
+    warnings.push('E-mail não informado');
+  }
+
+  if (!row.jornada) {
+    warnings.push('Jornada não informada');
+  }
+
+  if (!row.lotacao) {
+    warnings.push('Lotação não informada');
+  }
+
+  if (!['Ativo', 'Inativo'].includes(situacao)) {
+    warnings.push('Situação fora do padrão: Ativo ou Inativo');
+  }
+
+  return {
+    index,
+    nome,
+    cpf,
+    cargo,
+    categoria,
+    situacao,
+    warnings,
+    errors,
+    status: errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'success',
+  };
 }
