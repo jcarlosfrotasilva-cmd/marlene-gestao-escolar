@@ -1,44 +1,109 @@
-export default function ServidoresPage() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm uppercase tracking-[0.2em] text-primary-700">Cadastro</p>
-        <h1 className="mt-2 text-3xl font-bold text-slate-900">Servidores</h1>
-      </div>
+import { NextResponse } from 'next/server';
+import * as XLSX from 'xlsx';
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex-1">
-            <input
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-primary-400"
-              placeholder="Buscar por nome, cargo ou lotação"
-            />
-          </div>
-          <button className="rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-700">
-            Novo servidor
-          </button>
-        </div>
-      </div>
+import { prisma } from '@/lib/prisma';
+import { findColumnMap, sanitizeServerRow, validateServerRow } from '@/lib/validation';
 
-      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {[
-            ['Nome', 'Ana Souza'],
-            ['CPF', '123.456.789-00'],
-            ['Cargo', 'Professor de Ensino Médio'],
-            ['Categoria', 'Efetivo'],
-            ['Faixa', 'Faixa 3'],
-            ['Nível', 'Nível 1'],
-            ['Jornada', 'Integral'],
-            ['Lotação', 'EE Profa. Marlene Frattini'],
-          ].map(([label, value]) => (
-            <div key={label} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500">{label}</p>
-              <p className="mt-2 text-sm font-medium text-slate-900">{value}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+export async function GET() {
+  const servidores = await prisma.servidor.findMany({
+    include: {
+      cargo: true,
+      categoria: true,
+      lotacao: true,
+      beneficios: true,
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  return NextResponse.json(servidores);
+}
+
+export async function POST(request: Request) {
+  const contentType = request.headers.get('content-type') ?? '';
+
+  if (contentType.includes('multipart/form-data')) {
+    try {
+      const formData = await request.formData();
+      const file = formData.get('file');
+
+      if (!(file instanceof File)) {
+        return NextResponse.json({ message: 'Arquivo ausente.' }, { status: 400 });
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: '' });
+
+      if (!rows.length) {
+        return NextResponse.json({ message: 'A planilha não contém registros.' }, { status: 400 });
+      }
+
+      const headers = Object.keys(rows[0] ?? {});
+      const columnMap = findColumnMap(headers);
+      const validRows = rows
+        .map((row) => sanitizeServerRow(row, columnMap))
+        .filter((row) => Object.values(row).some((value) => value !== ''));
+
+      const seenCpfs = new Set<string>();
+      const validations = validRows.map((row, index) =>
+        validateServerRow(row, index + 2, seenCpfs),
+      );
+
+      return NextResponse.json({
+        fileName: file.name,
+        rows: validRows.length,
+        validations,
+        summary: {
+          total: validations.length,
+          success: validations.filter((item) => item.status === 'success').length,
+          warnings: validations.filter((item) => item.status === 'warning').length,
+          errors: validations.filter((item) => item.status === 'error').length,
+        },
+      });
+    } catch (error) {
+      console.error(error);
+      return NextResponse.json({ message: 'Não foi possível importar a planilha.', error: String(error) }, { status: 500 });
+    }
+  }
+
+  try {
+    const body = await request.json();
+
+    const nome = String(body.nome ?? '').trim();
+    const cpf = String(body.cpf ?? '').replace(/\D/g, '');
+
+    if (!nome || !cpf) {
+      return NextResponse.json({ message: 'Nome e CPF são obrigatórios.' }, { status: 400 });
+    }
+
+    const servidor = await prisma.servidor.create({
+      data: {
+        nome,
+        cpf,
+        rgcin: body.rgcin ? String(body.rgcin) : null,
+        dtnasc: body.dtnasc ? new Date(body.dtnasc) : null,
+        sexo: body.sexo ? String(body.sexo) : null,
+        tel: body.tel ? String(body.tel) : null,
+        email: body.email ? String(body.email) : null,
+        faixa: body.faixa ? String(body.faixa) : null,
+        nivel: body.nivel ? String(body.nivel) : null,
+        jornada: body.jornada ? String(body.jornada) : null,
+        situacao: body.situacao ? String(body.situacao) : 'Ativo',
+        cargo: body.cargo ? { create: { nome: String(body.cargo) } } : undefined,
+        categoria: body.categoria ? { create: { nome: String(body.categoria) } } : undefined,
+        lotacao: body.lotacao ? { create: { nome: String(body.lotacao) } } : undefined,
+      },
+      include: {
+        cargo: true,
+        categoria: true,
+        lotacao: true,
+      },
+    });
+
+    return NextResponse.json(servidor, { status: 201 });
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ message: 'Não foi possível cadastrar o servidor.' }, { status: 500 });
+  }
 }
