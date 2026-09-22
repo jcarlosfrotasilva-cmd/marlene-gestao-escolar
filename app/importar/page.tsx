@@ -1,162 +1,63 @@
-export const expectedColumns = [
-  'nome',
-  'cpf',
-  'rgcin',
-  'dtnasc',
-  'sexo',
-  'tel',
-  'email',
-  'cargo',
-  'categoria',
-  'faixa',
-  'nivel',
-  'jornada',
-  'lotacao',
-  'situacao',
-];
+# Marlene Gestão Escolar
 
-export const columnAliases: Record<string, string[]> = {
-  nome: ['nome', 'nome completo', 'nome_completo'],
-  cpf: ['cpf'],
-  rgcin: ['rgcin', 'rg', 'cin'],
-  dtnasc: ['dtnasc', 'data nascimento', 'dt_nasc'],
-  sexo: ['sexo'],
-  tel: ['tel', 'telefone', 'celular'],
-  email: ['email', 'e-mail'],
-  cargo: ['cargo', 'cargo atual'],
-  categoria: ['categoria', 'vinculo', 'tipo de vínculo'],
-  faixa: ['faixa'],
-  nivel: ['nivel', 'nível'],
-  jornada: ['jornada'],
-  lotacao: ['lotacao', 'unidade', 'lotação'],
-  situacao: ['situacao', 'status'],
-};
+Sistema web profissional para gestão de servidores da EE Profa. Marlene Frattini.
 
-export function normalizeText(value: unknown): string {
-  return String(value ?? '').trim();
-}
+## Stack
 
-export function normalizeCpf(value: unknown): string {
-  return normalizeText(value).replace(/\D/g, '');
-}
+- Next.js
+- TypeScript
+- Tailwind CSS
+- Prisma
+- PostgreSQL
+- Suporte a importação de Excel
 
-export function normalizeEmail(value: unknown): string {
-  return normalizeText(value).toLowerCase();
-}
+## Estrutura inicial
 
-export function toTitleCase(value: string): string {
-  return value
-    .toLowerCase()
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
+- `app/` — rotas e páginas do sistema
+- `components/` — layout e interface reutilizável
+- `lib/` — utilitários, validações e conexão com o banco
+- `prisma/` — schema e modelos do Prisma
 
-export function canonicalizeHeader(value: string): string {
-  return normalizeText(value).toLowerCase().replace(/[^a-z0-9]/g, '');
-}
+## Como executar em ambiente local
 
-export function findColumnMap(headers: string[]): Record<string, string> {
-  const map: Record<string, string> = {};
+1. Instale as dependências:
+   ```bash
+   npm install
+   ```
+2. Crie o arquivo `.env` com base no `.env.example`:
+   ```bash
+   cp .env.example .env
+   ```
+3. Ajuste a variável `DATABASE_URL` para seu PostgreSQL local.
+4. Gere o cliente Prisma:
+   ```bash
+   npx prisma generate
+   ```
+5. Aplique o schema no banco:
+   ```bash
+   npx prisma db push
+   ```
+6. Inicie a aplicação:
+   ```bash
+   npm run dev
+   ```
 
-  for (const header of headers) {
-    const normalizedHeader = canonicalizeHeader(header);
+A aplicação estará disponível em `http://localhost:3000`.
 
-    for (const [target, aliases] of Object.entries(columnAliases)) {
-      const aliasSet = aliases.map((alias) => canonicalizeHeader(alias));
+## Funcionalidades base implementadas
 
-      if (aliasSet.includes(normalizedHeader)) {
-        map[target] = header;
-        break;
-      }
-    }
-  }
+- Dashboard administrativo
+- Tela de login
+- Cadastro e listagem de servidores
+- Importação e validação de planilha Excel
+- Detecção de CPF duplicado
+- Identificação de campos vazios e avisos
+- Layout responsivo
 
-  return map;
-}
+## Próximos passos
 
-export function sanitizeServerRow(row: Record<string, unknown>, columnMap: Record<string, string>) {
-  const result: Record<string, string> = {};
-
-  for (const key of Object.keys(columnMap)) {
-    const sourceKey = columnMap[key];
-    const rawValue = row[sourceKey] ?? '';
-    const text = normalizeText(rawValue);
-    result[key] = text;
-  }
-
-  result.nome = toTitleCase(result.nome || '');
-  result.cpf = normalizeCpf(result.cpf);
-  result.email = normalizeEmail(result.email);
-  result.categoria = toTitleCase(result.categoria || '');
-  result.cargo = toTitleCase(result.cargo || '');
-  result.lotacao = toTitleCase(result.lotacao || '');
-  result.situacao = normalizeText(result.situacao || 'Ativo').replace(/^\w/, (char) => char.toUpperCase());
-  result.jornada = toTitleCase(result.jornada || '');
-
-  return result;
-}
-
-export function validateServerRow(
-  row: Record<string, string>,
-  index: number,
-  seenCpfs: Set<string>,
-) {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  const nome = normalizeText(row.nome);
-  const cpf = normalizeCpf(row.cpf);
-  const cargo = normalizeText(row.cargo);
-  const categoria = normalizeText(row.categoria);
-  const situacao = normalizeText(row.situacao) || 'Ativo';
-
-  if (!nome) {
-    errors.push('Nome ausente');
-  }
-
-  if (!cpf || cpf.length !== 11) {
-    errors.push('CPF inválido ou vazio');
-  } else if (seenCpfs.has(cpf)) {
-    errors.push('CPF duplicado');
-  } else {
-    seenCpfs.add(cpf);
-  }
-
-  if (!cargo) {
-    errors.push('Cargo ausente');
-  }
-
-  if (!categoria) {
-    errors.push('Categoria ausente');
-  }
-
-  if (!row.email) {
-    warnings.push('E-mail não informado');
-  }
-
-  if (!row.jornada) {
-    warnings.push('Jornada não informada');
-  }
-
-  if (!row.lotacao) {
-    warnings.push('Lotação não informada');
-  }
-
-  if (!['Ativo', 'Inativo'].includes(situacao)) {
-    warnings.push('Situação fora do padrão: Ativo ou Inativo');
-  }
-
-  return {
-    index,
-    nome,
-    cpf,
-    cargo,
-    categoria,
-    situacao,
-    warnings,
-    errors,
-    status: errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'success',
-  };
-}
+- autenticação real com sessão
+- cadastro/admin de usuários
+- regras de vantagem e benefícios
+- relatórios avançados e exportação
+- banco de dados completo com históricos e auditoria
