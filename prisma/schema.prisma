@@ -1,0 +1,84 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Categoria {
+  id        String    @id @default(cuid())
+  nome      String    @unique
+  servidors Servidor[]
+  createdAt DateTime  @default(now())
+}
+
+model Cargo {
+  id        String    @id @default(cuid())
+  nome      String    @unique
+  servidors Servidor[]
+  createdAt DateTime  @default(now())
+}
+
+model Lotacao {
+  id        String    @id @default(cuid())
+  nome      String    @unique
+  servidors Servidor[]
+  createdAt DateTime  @default(now())
+}
+
+model Servidor {
+  id          String    @id @default(cuid())
+  nome        String
+  cpf         String    @unique
+  rgcin       String?
+  dtnasc      DateTime?
+  sexo        String?
+  tel         String?
+  email       String?
+  cargoId     String?
+  cargo       Cargo?    @relation(fields: [cargoId], references: [id])
+  categoriaId String?
+  categoria   Categoria? @relation(fields: [categoriaId], references: [id])
+  faixa       String?
+  nivel       String?
+  jornada     String?
+  lotacaoId   String?
+  lotacao     Lotacao?  @relation(fields: [lotacaoId], references: [id])
+  situacao    String    @default("Ativo")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Importacao {
+  id           String          @id @default(cuid())
+  nomeArquivo  String
+  totalLinhas  Int
+  registrosOK  Int
+  registrosWarn Int
+  registrosErr Int
+  status       String
+  createdAt    DateTime        @default(now())
+  erros        ImportacaoErro[]
+}
+
+model ImportacaoErro {
+  id          String      @id @default(cuid())
+  importacao  Importacao  @relation(fields: [importacaoId], references: [id])
+  importacaoId String
+  linha       Int
+  campo       String?
+  mensagem    String
+  createdAt   DateTime    @default(now())
+}
