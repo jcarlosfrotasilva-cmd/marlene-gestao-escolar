@@ -4,6 +4,13 @@
 
 :root {
   color-scheme: light;
+  --primary-50: #eef5ff;
+  --primary-500: #3a6ef0;
+  --primary-600: #2d58d6;
+  --primary-700: #2447b5;
+  --slate-100: #f8fafc;
+  --slate-200: #e2e8f0;
+  --slate-900: #0f172a;
 }
 
 html {
@@ -14,14 +21,21 @@ body {
   margin: 0;
   min-height: 100vh;
   font-family: Arial, Helvetica, sans-serif;
-  background: #f8fafc;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  color: #0f172a;
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
 * {
   box-sizing: border-box;
+}
+
+::selection {
+  background: rgba(58, 110, 240, 0.18);
 }

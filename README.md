@@ -1,162 +1,110 @@
-export const expectedColumns = [
-  'nome',
-  'cpf',
-  'rgcin',
-  'dtnasc',
-  'sexo',
-  'tel',
-  'email',
-  'cargo',
-  'categoria',
-  'faixa',
-  'nivel',
-  'jornada',
-  'lotacao',
-  'situacao',
-];
+# Marlene Gestão Escolar
 
-export const columnAliases: Record<string, string[]> = {
-  nome: ['nome', 'nome completo', 'nome_completo'],
-  cpf: ['cpf'],
-  rgcin: ['rgcin', 'rg', 'cin'],
-  dtnasc: ['dtnasc', 'data nascimento', 'dt_nasc'],
-  sexo: ['sexo'],
-  tel: ['tel', 'telefone', 'celular'],
-  email: ['email', 'e-mail'],
-  cargo: ['cargo', 'cargo atual'],
-  categoria: ['categoria', 'vinculo', 'tipo de vínculo'],
-  faixa: ['faixa'],
-  nivel: ['nivel', 'nível'],
-  jornada: ['jornada'],
-  lotacao: ['lotacao', 'unidade', 'lotação'],
-  situacao: ['situacao', 'status'],
-};
+Sistema administrativo para gestão de servidores e regras funcionais da escola.
 
-export function normalizeText(value: unknown): string {
-  return String(value ?? '').trim();
-}
+## Visão geral
 
-export function normalizeCpf(value: unknown): string {
-  return normalizeText(value).replace(/\D/g, '');
-}
+A aplicação foi pensada para apoiar a gestão escolar com foco em:
 
-export function normalizeEmail(value: unknown): string {
-  return normalizeText(value).toLowerCase();
-}
+- cadastro de servidores;
+- importação de dados em planilha;
+- validação de registros;
+- diferenciação por categoria e vínculo;
+- regras e benefícios funcionais;
+- histórico funcional por servidor;
+- painel executivo e relatórios;
+- autenticação básica para uso institucional.
 
-export function toTitleCase(value: string): string {
-  return value
-    .toLowerCase()
-    .split(' ')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
+## Stack
 
-export function canonicalizeHeader(value: string): string {
-  return normalizeText(value).toLowerCase().replace(/[^a-z0-9]/g, '');
-}
+- Next.js 14
+- React 18
+- TypeScript
+- Tailwind CSS
+- Prisma ORM
+- PostgreSQL
+- xlsx para importação de planilhas Excel
 
-export function findColumnMap(headers: string[]): Record<string, string> {
-  const map: Record<string, string> = {};
+## Requisitos
 
-  for (const header of headers) {
-    const normalizedHeader = canonicalizeHeader(header);
+- Node.js 18+
+- PostgreSQL
+- npm ou pnpm
 
-    for (const [target, aliases] of Object.entries(columnAliases)) {
-      const aliasSet = aliases.map((alias) => canonicalizeHeader(alias));
+## Configuração inicial
 
-      if (aliasSet.includes(normalizedHeader)) {
-        map[target] = header;
-        break;
-      }
-    }
-  }
+1. Clone o projeto.
+2. Instale as dependências:
 
-  return map;
-}
+```bash
+npm install
+```
 
-export function sanitizeServerRow(row: Record<string, unknown>, columnMap: Record<string, string>) {
-  const result: Record<string, string> = {};
+3. Crie um arquivo `.env` a partir do exemplo:
 
-  for (const key of Object.keys(columnMap)) {
-    const sourceKey = columnMap[key];
-    const rawValue = row[sourceKey] ?? '';
-    const text = normalizeText(rawValue);
-    result[key] = text;
-  }
+```bash
+cp .env.example .env
+```
 
-  result.nome = toTitleCase(result.nome || '');
-  result.cpf = normalizeCpf(result.cpf);
-  result.email = normalizeEmail(result.email);
-  result.categoria = toTitleCase(result.categoria || '');
-  result.cargo = toTitleCase(result.cargo || '');
-  result.lotacao = toTitleCase(result.lotacao || '');
-  result.situacao = normalizeText(result.situacao || 'Ativo').replace(/^\w/, (char) => char.toUpperCase());
-  result.jornada = toTitleCase(result.jornada || '');
+4. Configure a variável `DATABASE_URL` no arquivo `.env`.
+5. Gere o Prisma Client:
 
-  return result;
-}
+```bash
+npm run db:generate
+```
 
-export function validateServerRow(
-  row: Record<string, string>,
-  index: number,
-  seenCpfs: Set<string>,
-) {
-  const errors: string[] = [];
-  const warnings: string[] = [];
+6. Sincronize o banco:
 
-  const nome = normalizeText(row.nome);
-  const cpf = normalizeCpf(row.cpf);
-  const cargo = normalizeText(row.cargo);
-  const categoria = normalizeText(row.categoria);
-  const situacao = normalizeText(row.situacao) || 'Ativo';
+```bash
+npm run db:push
+```
 
-  if (!nome) {
-    errors.push('Nome ausente');
-  }
+7. Inicie o ambiente local:
 
-  if (!cpf || cpf.length !== 11) {
-    errors.push('CPF inválido ou vazio');
-  } else if (seenCpfs.has(cpf)) {
-    errors.push('CPF duplicado');
-  } else {
-    seenCpfs.add(cpf);
-  }
+```bash
+npm run dev
+```
 
-  if (!cargo) {
-    errors.push('Cargo ausente');
-  }
+## Scripts disponibilizados
 
-  if (!categoria) {
-    errors.push('Categoria ausente');
-  }
+```bash
+npm run dev
+npm run build
+npm run start
+npm run lint
+npm run db:generate
+npm run db:push
+npm run db:studio
+```
 
-  if (!row.email) {
-    warnings.push('E-mail não informado');
-  }
+## Funcionalidades principais
 
-  if (!row.jornada) {
-    warnings.push('Jornada não informada');
-  }
+- Dashboard executivo com indicadores gerais;
+- Cadastro completo de servidores;
+- Importação de planilha para validação inicial;
+- Cadastro de categorias, lotações e regras;
+- Gerenciamento de benefícios e histórico funcional;
+- Painel de configurações administrativas;
+- Fluxo de login e administração inicial.
 
-  if (!row.lotacao) {
-    warnings.push('Lotação não informada');
-  }
+## Estrutura principal
 
-  if (!['Ativo', 'Inativo'].includes(situacao)) {
-    warnings.push('Situação fora do padrão: Ativo ou Inativo');
-  }
+- `app/` — rotas e páginas da aplicação
+- `components/` — componentes reutilizáveis da interface
+- `lib/` — utilitários e configurações gerais
+- `prisma/` — schema e infraestrutura do banco
+- `app/api/` — APIs internas do sistema
 
-  return {
-    index,
-    nome,
-    cpf,
-    cargo,
-    categoria,
-    situacao,
-    warnings,
-    errors,
-    status: errors.length > 0 ? 'error' : warnings.length > 0 ? 'warning' : 'success',
-  };
-}
+## Observações
+
+Este projeto está em evolução como solução institucional de gestão escolar e foi estruturado para permitir extensões futuras, como:
+
+- permissões por perfil;
+- documentos e anexos;
+- exportação para PDF/Excel;
+- relatórios mais detalhados por categoria, cargo e lotação;
+- regras normativas específicas da unidade escolar.
+
+## Licença
+
+MIT
